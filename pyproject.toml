@@ -2,8 +2,8 @@
 name = "veratrace-ingestion"
 version = "0.1.0"
 description = "Enterprise integration service — connects vendor APIs and produces TwuSignals"
-requires-python = ">=3.12"
-dependencies = []
+requires-python = ">=3.9"
+dependencies = ["boto3>=1.35"]
 
 [project.optional-dependencies]
 dev = ["pytest", "ruff"]
