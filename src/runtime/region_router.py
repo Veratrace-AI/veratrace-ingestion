@@ -40,7 +40,7 @@ RESIDENCY_ZONES = {
 }
 
 
-def detect_region_from_arn(arn: str) -> str | None:
+def detect_region_from_arn(arn: str) :
     """Parse AWS region from ARN. Returns None if not a valid ARN."""
     parts = arn.split(":")
     if len(parts) >= 4 and parts[0] == "arn" and parts[1] == "aws":

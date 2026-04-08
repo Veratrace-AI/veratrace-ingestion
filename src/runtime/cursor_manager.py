@@ -36,7 +36,7 @@ def _headers():
     }
 
 
-def get_cursor(integration_account_id: str, stream: str) -> str | None:
+def get_cursor(integration_account_id: str, stream: str) :
     """Get the last saved cursor for a stream. Returns None if no cursor exists."""
     url = (
         f"{SUPABASE_URL}/rest/v1/{CURSOR_TABLE}"

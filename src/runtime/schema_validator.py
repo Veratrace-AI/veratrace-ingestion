@@ -20,7 +20,7 @@ class SchemaDrift:
     severity: str  # "added", "removed", "type_changed", "renamed"
 
 
-def compute_schema_hash(data: dict | list) -> str:
+def compute_schema_hash(data: dict) -> str:
     """
     Compute a deterministic hash of the response shape.
     Only considers field names and types, not values.
@@ -44,10 +44,10 @@ def compute_schema_hash(data: dict | list) -> str:
 
 
 def detect_drift(
-    response: dict | list,
+    response: dict,
     expected_hash: str,
-    expected_fields: set[str] | None = None,
-) -> tuple[str, list[SchemaDrift]]:
+    expected_fields=None,
+) :
     """
     Compare response schema against expected.
 

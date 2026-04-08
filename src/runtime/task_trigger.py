@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 def trigger_compilation(
     instance_id: str,
     integration_account_ids: list[str],
-    auth_token: str | None = None,
-) -> dict | None:
+    auth_token: str = None,
+) :
     """
     POST /instances/{instance_id}/tasks to trigger TWU compilation.
 
@@ -69,8 +69,8 @@ def trigger_compilation(
 def get_task_status(
     instance_id: str,
     task_id: str,
-    auth_token: str | None = None,
-) -> dict | None:
+    auth_token: str = None,
+) :
     """Poll task status. Returns task object or None."""
     url = f"{CONTROL_PLANE_URL}/instances/{instance_id}/tasks/{task_id}"
     headers = {}

@@ -23,7 +23,7 @@ class ConnectionTestResult:
 @dataclass
 class SyncResult:
     signals: list[TwuSignal]
-    cursor: str | None = None  # next cursor for incremental sync
+    cursor: str = None  # next cursor for incremental sync
     has_more: bool = False  # True if more pages available
     records_fetched: int = 0
     records_skipped: int = 0
@@ -42,8 +42,8 @@ class QuotaUsage:
 @dataclass
 class ConnectorHealth:
     status: str  # HEALTHY, DEGRADED, FAILED, PENDING_SYNC
-    last_sync_at: str | None = None
-    last_error: str | None = None
+    last_sync_at: str = None
+    last_error: str = None
     records_synced_last_run: int = 0
     schema_drift_detected: bool = False
 
@@ -82,12 +82,12 @@ class BaseConnector(ABC):
     # ── Sync ───────────────────────────────────────────────────────────────
 
     @abstractmethod
-    def sync_incremental(self, cursor: str | None = None) -> SyncResult:
+    def sync_incremental(self, cursor: str = None) -> SyncResult:
         """Fetch records modified since the last cursor."""
         ...
 
     @abstractmethod
-    def sync_backfill(self, start_date: datetime | None = None) -> SyncResult:
+    def sync_backfill(self, start_date: datetime = None) -> SyncResult:
         """Fetch all historical records from start_date (or earliest available)."""
         ...
 

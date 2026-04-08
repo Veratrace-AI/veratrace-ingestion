@@ -1,0 +1,50 @@
+{
+  "ContactId": "12345678-1234-1234-1234-123456789012",
+  "InitialContactId": "12345678-1234-1234-1234-123456789012",
+  "PreviousContactId": null,
+  "Channel": "VOICE",
+  "InitiationMethod": "INBOUND",
+  "InitiationTimestamp": "2026-04-07T14:00:00Z",
+  "ConnectedToSystemTimestamp": "2026-04-07T14:00:05Z",
+  "DisconnectTimestamp": "2026-04-07T14:07:30Z",
+  "DisconnectReason": "CUSTOMER_DISCONNECT",
+  "Queue": {
+    "Name": "BasicQueue",
+    "ARN": "arn:aws:connect:us-east-1:123456789012:instance/test/queue/basic",
+    "EnqueueTimestamp": "2026-04-07T14:00:01Z",
+    "DequeueTimestamp": "2026-04-07T14:00:05Z",
+    "Duration": 4
+  },
+  "Agent": {
+    "ARN": "arn:aws:connect:us-east-1:123456789012:instance/test/agent/agent-001",
+    "Username": "jsmith",
+    "AfterContactWorkDuration": 30,
+    "AgentInteractionDuration": 445,
+    "HoldDuration": 0
+  },
+  "AgentConnectionAttempts": 1,
+  "Attributes": {
+    "customerSegment": "enterprise",
+    "caseId": "CASE-2026-1234"
+  },
+  "Recording": {
+    "Location": "s3://connect-recordings/2026/04/07/12345678.wav",
+    "Type": "AUDIO",
+    "Status": "AVAILABLE"
+  },
+  "CustomerEndpoint": {
+    "Type": "TELEPHONE_NUMBER",
+    "Address": "+12065551234"
+  },
+  "SystemEndpoint": {
+    "Type": "TELEPHONE_NUMBER",
+    "Address": "+18005551000"
+  },
+  "InstanceARN": "arn:aws:connect:us-east-1:123456789012:instance/test-instance-id",
+  "AnalysisStatus": "COMPLETED",
+  "SentimentAnalysis": {
+    "OverallSentiment": "POSITIVE",
+    "CustomerSentiment": "NEUTRAL",
+    "AgentSentiment": "POSITIVE"
+  }
+}

@@ -63,7 +63,7 @@ def decorrelated_jitter(last_backoff: float) -> float:
 class RetryError(Exception):
     """Raised when all retries are exhausted."""
 
-    def __init__(self, message: str, last_error: Exception | None = None):
+    def __init__(self, message: str, last_error: Exception = None):
         super().__init__(message)
         self.last_error = last_error
 
@@ -73,8 +73,8 @@ def with_retry(
     *,
     max_retries: int = MAX_RETRIES,
     idempotent: bool = True,
-    circuit_breaker: CircuitBreaker | None = None,
-    on_retry: Callable[[int, float, Exception], None] | None = None,
+    circuit_breaker: CircuitBreaker = None,
+    on_retry: Callable[[int, float, Exception], None] = None,
 ) -> T:
     """
     Execute fn with retry logic.
@@ -94,7 +94,7 @@ def with_retry(
         raise RetryError("Circuit breaker open — service appears down")
 
     last_backoff = BASE_BACKOFF_S
-    last_error: Exception | None = None
+    last_error: Exception = None
 
     for attempt in range(1, max_retries + 1):
         try:
