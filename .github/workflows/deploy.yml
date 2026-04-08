@@ -33,21 +33,21 @@ jobs:
             set -e
 
             # Clone or update the repo
-            if [ -d /opt/veratrace-ingestion ]; then
-              cd /opt/veratrace-ingestion
+            if [ -d ~/veratrace-ingestion ]; then
+              cd ~/veratrace-ingestion
               git fetch origin
               git reset --hard origin/main
             else
-              git clone https://github.com/vtgraham1/veratrace-ingestion.git /opt/veratrace-ingestion
-              cd /opt/veratrace-ingestion
+              git clone https://github.com/vtgraham1/veratrace-ingestion.git ~/veratrace-ingestion
+              cd ~/veratrace-ingestion
             fi
 
             # Install dependencies
             pip3 install boto3 --quiet 2>/dev/null || true
 
             # Create env file
-            if [ ! -f /opt/veratrace-ingestion/.env ]; then
-              echo "# Created by deploy — fill in values" > /opt/veratrace-ingestion/.env
+            if [ ! -f ~/veratrace-ingestion/.env ]; then
+              echo "# Created by deploy — fill in values" > ~/veratrace-ingestion/.env
             fi
 
             echo "Deploy complete — $(git log -1 --format='%h %s')"
@@ -66,6 +66,6 @@ jobs:
           echo "$DEPLOY_KEY" > "$KEY_FILE"
 
           ssh -i "$KEY_FILE" -o StrictHostKeyChecking=no -o ConnectTimeout=10 vera@159.203.133.76 \
-            "printf 'SUPABASE_URL=${VB_SUPABASE_URL}\nSUPABASE_SERVICE_ROLE_KEY=${VB_SUPABASE_KEY}\nCONTROL_PLANE_URL=https://veratrace-control-plane.onrender.com\n' > /opt/veratrace-ingestion/.env && chmod 600 /opt/veratrace-ingestion/.env && echo 'Ingestion .env written'; if ! crontab -l 2>/dev/null | grep -q 'veratrace-ingestion'; then (crontab -l 2>/dev/null; echo ''; echo '# Veratrace Ingestion Service — sync every 15 min weekdays 7am-7pm PT (14:00-02:00 UTC)'; echo '*/15 14-23,0-2 * * 1-5 set -a && source /opt/veratrace-ingestion/.env && set +a && cd /opt/veratrace-ingestion && python3 -m src.sync.scheduler >> /opt/veraagents/logs/ingestion.log 2>&1') | crontab - && echo 'Ingestion cron added'; else echo 'Ingestion cron already present'; fi"
+            "printf 'SUPABASE_URL=${VB_SUPABASE_URL}\nSUPABASE_SERVICE_ROLE_KEY=${VB_SUPABASE_KEY}\nCONTROL_PLANE_URL=https://veratrace-control-plane.onrender.com\n' > ~/veratrace-ingestion/.env && chmod 600 ~/veratrace-ingestion/.env && echo 'Ingestion .env written'; if ! crontab -l 2>/dev/null | grep -q 'veratrace-ingestion'; then (crontab -l 2>/dev/null; echo ''; echo '# Veratrace Ingestion Service — sync every 15 min weekdays 7am-7pm PT (14:00-02:00 UTC)'; echo '*/15 14-23,0-2 * * 1-5 set -a && source ~/veratrace-ingestion/.env && set +a && cd ~/veratrace-ingestion && python3 -m src.sync.scheduler >> /opt/veraagents/logs/ingestion.log 2>&1') | crontab - && echo 'Ingestion cron added'; else echo 'Ingestion cron already present'; fi"
 
           rm -f "$KEY_FILE"
