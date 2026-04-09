@@ -62,8 +62,40 @@ class IngestionHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/health":
             self._json_response(200, {"status": "ok", "supabase": bool(SUPABASE_URL)})
+        elif self.path == "/health/warming":
+            self._handle_warming_health()
         else:
             self._json_response(404, {"error": "Not found"})
+
+    def _handle_warming_health(self):
+        """Check if warming is running and producing contacts."""
+        import os, datetime
+        log_path = "/opt/veraagents/logs/warming.log"
+        try:
+            if not os.path.exists(log_path):
+                self._json_response(200, {"status": "no_log", "message": "Warming log not found — cron may not have run yet"})
+                return
+            stat = os.stat(log_path)
+            modified = datetime.datetime.fromtimestamp(stat.st_mtime)
+            age_hours = (datetime.datetime.now() - modified).total_seconds() / 3600
+            # Read last few lines for status
+            with open(log_path, "r") as f:
+                lines = f.readlines()
+                last_lines = lines[-5:] if len(lines) >= 5 else lines
+            last_result = ""
+            for line in reversed(last_lines):
+                if "Created:" in line or "Failed:" in line or "Warming complete" in line:
+                    last_result = line.strip()
+                    break
+            status = "healthy" if age_hours < 2 else "stale"
+            self._json_response(200, {
+                "status": status,
+                "last_run_hours_ago": round(age_hours, 1),
+                "last_result": last_result,
+                "log_lines": len(lines),
+            })
+        except Exception as e:
+            self._json_response(500, {"status": "error", "message": str(e)[:200]})
 
     def _handle_test_connection(self):
         """Test AWS credentials by assuming the role and calling DescribeInstance."""
