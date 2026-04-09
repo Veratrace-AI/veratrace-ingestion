@@ -11,6 +11,7 @@ Region: parsed from instance ARN position 4.
 Multi-region: separate integration account per region.
 """
 import logging
+import threading
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -55,6 +56,7 @@ class AmazonConnectConnector(BaseConnector):
         self._schema_hash = EXPECTED_SCHEMA_HASH
         self._assumed_creds = None
         self._assumed_creds_expiry = 0
+        self._creds_lock = threading.Lock()
 
     def _parse_instance_id(self):
         """Extract the Connect instance ID from the ARN."""
@@ -112,37 +114,37 @@ class AmazonConnectConnector(BaseConnector):
     def _assume_role(self):
         """
         Assume the customer's IAM role via STS.
-        Caches credentials until 5 minutes before expiry.
+        Caches credentials until 5 minutes before expiry. Thread-safe.
         """
-        now = time.time()
-        if self._assumed_creds and self._assumed_creds_expiry > now + 300:
+        with self._creds_lock:
+            now = time.time()
+            if self._assumed_creds and self._assumed_creds_expiry > now + 300:
+                return self._assumed_creds
+
+            role_arn = self.credentials.get("roleArn", "")
+            external_id = self.credentials.get("externalId", "")
+            session_name = f"veratrace-{self.integration_account_id[:8]}"
+
+            logger.info("Assuming role %s for region %s", role_arn[:60], self._region)
+
+            sts = boto3.client("sts", region_name=self._region)
+            assume_params = {
+                "RoleArn": role_arn,
+                "RoleSessionName": session_name,
+                "DurationSeconds": 3600,
+            }
+            if external_id:
+                assume_params["ExternalId"] = external_id
+
+            resp = sts.assume_role(**assume_params)
+            creds = resp["Credentials"]
+            self._assumed_creds = {
+                "aws_access_key_id": creds["AccessKeyId"],
+                "aws_secret_access_key": creds["SecretAccessKey"],
+                "aws_session_token": creds["SessionToken"],
+            }
+            self._assumed_creds_expiry = creds["Expiration"].timestamp()
             return self._assumed_creds
-
-        role_arn = self.credentials.get("roleArn", "")
-        external_id = self.credentials.get("externalId", "")
-        session_name = f"veratrace-{self.integration_account_id[:8]}"
-
-        logger.info("Assuming role %s for region %s", role_arn[:60], self._region)
-
-        sts = boto3.client("sts", region_name=self._region)
-        assume_params = {
-            "RoleArn": role_arn,
-            "RoleSessionName": session_name,
-            "DurationSeconds": 3600,
-        }
-        # External ID prevents confused deputy attacks — required by our CloudFormation template
-        if external_id:
-            assume_params["ExternalId"] = external_id
-
-        resp = sts.assume_role(**assume_params)
-        creds = resp["Credentials"]
-        self._assumed_creds = {
-            "aws_access_key_id": creds["AccessKeyId"],
-            "aws_secret_access_key": creds["SecretAccessKey"],
-            "aws_session_token": creds["SessionToken"],
-        }
-        self._assumed_creds_expiry = creds["Expiration"].timestamp()
-        return self._assumed_creds
 
     def _get_connect_client(self):
         """Get a boto3 Connect client using assumed role credentials."""

@@ -4,6 +4,7 @@ Schema validator — detects drift in vendor API responses.
 Hashes the response shape (field names + types) and compares to expected.
 On drift: log, flag signals as degraded, alert, and optionally auto-patch.
 """
+from __future__ import annotations
 import json
 import hashlib
 import logging

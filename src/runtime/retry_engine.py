@@ -5,6 +5,7 @@ Retry engine with decorrelated jitter and circuit breaker.
 - Circuit breaker stops retrying when a service is genuinely down.
 - Never retries non-idempotent operations blindly.
 """
+from __future__ import annotations
 import time
 import random
 import logging

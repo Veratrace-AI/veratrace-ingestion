@@ -8,6 +8,7 @@ Key properties:
 - Degraded signals preserved with raw payload for later reprocessing
 - Append-only: no UPDATE or DELETE on signal records
 """
+from __future__ import annotations
 import json
 import uuid
 import hashlib

@@ -5,6 +5,7 @@ after each sync batch writes signals to the database.
 The SQS worker on the backend picks up the task and runs the compiler pipeline:
 signal canonicalization → correlation → attribution → policy → seal.
 """
+from __future__ import annotations
 import json
 import logging
 import urllib.request

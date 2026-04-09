@@ -14,6 +14,7 @@ Signal types:
 Graceful degradation: if non-critical fields are missing, the signal is
 created with degraded=True and the raw payload is preserved.
 """
+from __future__ import annotations
 import logging
 from datetime import datetime
 

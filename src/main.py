@@ -9,10 +9,11 @@ Usage:
   python3 -m src.main                    # start HTTP server on port 8090
   python3 -m src.main --port 8091        # custom port
 """
+import datetime
 import json
 import logging
-import sys
 import os
+import sys
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 # Add project root to path
@@ -69,7 +70,6 @@ class IngestionHandler(BaseHTTPRequestHandler):
 
     def _handle_warming_health(self):
         """Check if warming is running and producing contacts."""
-        import os, datetime
         log_path = "/opt/veraagents/logs/warming.log"
         try:
             if not os.path.exists(log_path):
@@ -183,8 +183,9 @@ class IngestionHandler(BaseHTTPRequestHandler):
 
     def _cors_headers(self):
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-API-Key")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Max-Age", "86400")
 
     def log_message(self, format, *args):
         # Suppress default access logs — we use structured logging

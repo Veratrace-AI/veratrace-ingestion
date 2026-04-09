@@ -60,8 +60,11 @@ CONTACT_LENS_FIELDS = {
     "IssuesDetected",      # Array of {Name, Timestamp}
 }
 
-# Schema hash computed from these fields — update when Connect changes their CTR format
-EXPECTED_SCHEMA_HASH = "initial_placeholder"
+# Schema hash computed from sorted field names — update when Connect changes their CTR format
+import hashlib
+EXPECTED_SCHEMA_HASH = hashlib.sha256(
+    "|".join(sorted(EXPECTED_CTR_FIELDS)).encode()
+).hexdigest()[:16]
 
 # Fields that contain PII — must be encrypted at write time
 PII_FIELDS = {

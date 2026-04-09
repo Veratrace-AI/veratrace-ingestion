@@ -4,6 +4,7 @@ Token bucket rate limiter — per-endpoint, respects vendor ceilings.
 Never exceeds RATE_LIMIT_CEILING_PCT of the vendor's stated limit.
 Pauses ALL requests (not just the failed one) on 429.
 """
+from __future__ import annotations
 import time
 import threading
 from dataclasses import dataclass, field

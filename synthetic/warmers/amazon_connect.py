@@ -404,11 +404,15 @@ class ConnectWarmer(BaseWarmer):
                         ContentType="text/plain",
                         Content=chat_message,
                     )
-                    # Brief wait then disconnect so the contact closes and CTR generates
                     time.sleep(1)
-                    participant_client.disconnect_participant(ConnectionToken=conn_token)
+                    try:
+                        participant_client.disconnect_participant(ConnectionToken=conn_token)
+                    except Exception:
+                        pass  # Contact may have already disconnected via flow
                 except Exception as e:
                     logger.debug("Chat message send failed (non-fatal): %s", str(e)[:80])
+            else:
+                logger.warning("No ParticipantToken returned for chat contact %s — Lex bot won't be triggered", contact_id[:12])
 
             return {"id": contact_id, "type": "CHAT", "customer": customer_name, "scenario": scenario["reason"]}
 
