@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from synthetic.warmers.base import BaseWarmer, WarmResult
-from synthetic.warmers.amazon_connect import ConnectWarmer, CUSTOMER_NAMES, CONTACT_REASONS
+from synthetic.warmers.amazon_connect import ConnectWarmer, CUSTOMER_NAMES, CONTACT_SCENARIOS
 
 
 # ── Base Warmer Tests ────────────────────────────────────────────────────────
@@ -104,8 +104,21 @@ class TestConnectWarmer:
     def test_customer_names_not_empty(self):
         assert len(CUSTOMER_NAMES) >= 10
 
-    def test_contact_reasons_not_empty(self):
-        assert len(CONTACT_REASONS) >= 5
+    def test_contact_scenarios_cover_ai_human_patterns(self):
+        assert len(CONTACT_SCENARIOS) >= 8
+        # Verify we have all key patterns
+        resolutions = {s["resolution"] for s in CONTACT_SCENARIOS}
+        assert "ai_auto_resolved" in resolutions, "Missing AI-only scenario"
+        assert "human_escalation" in resolutions, "Missing human escalation scenario"
+        assert "human_resolved_after_ai" in resolutions, "Missing AI→human handoff"
+        assert "vendor_ai_overclaimed" in resolutions, "Missing vendor reconciliation scenario"
+
+    def test_all_scenarios_have_required_fields(self):
+        for s in CONTACT_SCENARIOS:
+            assert "reason" in s, f"Missing reason in {s}"
+            assert "ai_handled" in s, f"Missing ai_handled in {s}"
+            assert "resolution" in s, f"Missing resolution in {s}"
+            assert "description" in s, f"Missing description in {s}"
 
     @patch.object(ConnectWarmer, "_get_client")
     def test_validate_access_discovers_flow(self, mock_get_client):

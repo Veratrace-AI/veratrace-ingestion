@@ -23,7 +23,12 @@ from synthetic.warmers.base import BaseWarmer
 
 logger = logging.getLogger(__name__)
 
-# Realistic customer names for varied contact data
+# ── Veratrace AI/Human Hybrid Contact Scenarios ──────────────────────────────
+#
+# These contacts model the core Veratrace use case: enterprises running
+# hybrid AI + human operations where attribution, SLA compliance, and
+# cost accountability matter.
+
 CUSTOMER_NAMES = [
     "Alex Rivera", "Jordan Chen", "Sam Patel", "Morgan Kim",
     "Taylor Brooks", "Casey Wong", "Jamie Foster", "Drew Martinez",
@@ -32,12 +37,112 @@ CUSTOMER_NAMES = [
 ]
 
 CUSTOMER_SEGMENTS = ["enterprise", "mid-market", "smb", "consumer"]
-CONTACT_REASONS = [
-    "billing_inquiry", "technical_support", "account_setup",
-    "product_question", "service_cancellation", "upgrade_request",
-    "outage_report", "feature_request", "compliance_question",
+PRIORITIES = ["critical", "high", "medium", "medium", "low"]
+
+# Contact scenarios that exercise different AI/human handoff patterns
+CONTACT_SCENARIOS = [
+    # AI fully resolves — no human needed
+    {
+        "reason": "password_reset",
+        "ai_handled": "true",
+        "ai_agent": "ResolveAI-v3",
+        "ai_confidence": "0.95",
+        "human_needed": "false",
+        "resolution": "ai_auto_resolved",
+        "description": "Password reset — AI auto-resolved",
+    },
+    {
+        "reason": "account_balance_inquiry",
+        "ai_handled": "true",
+        "ai_agent": "ConnectBot-IVR",
+        "ai_confidence": "0.92",
+        "human_needed": "false",
+        "resolution": "ai_auto_resolved",
+        "description": "Balance check — AI self-service",
+    },
+    # AI routes to human — handoff scenario
+    {
+        "reason": "billing_dispute",
+        "ai_handled": "true",
+        "ai_agent": "SmartRoute-AI",
+        "ai_confidence": "0.38",
+        "human_needed": "true",
+        "resolution": "human_resolved_after_ai",
+        "description": "Billing dispute — AI triaged, human resolved",
+    },
+    {
+        "reason": "contract_negotiation",
+        "ai_handled": "true",
+        "ai_agent": "SmartRoute-AI",
+        "ai_confidence": "0.22",
+        "human_needed": "true",
+        "resolution": "human_resolved_after_ai",
+        "description": "Contract negotiation — AI routed to specialist",
+    },
+    # Human handles directly — AI couldn't help
+    {
+        "reason": "escalation_from_ai",
+        "ai_handled": "false",
+        "ai_agent": "ResolveAI-v3",
+        "ai_confidence": "0.15",
+        "human_needed": "true",
+        "resolution": "human_escalation",
+        "description": "Complex issue — AI escalated to human",
+    },
+    {
+        "reason": "compliance_audit_request",
+        "ai_handled": "false",
+        "ai_agent": "none",
+        "ai_confidence": "0.0",
+        "human_needed": "true",
+        "resolution": "human_only",
+        "description": "Compliance request — requires human judgment",
+    },
+    # SLA breach scenarios
+    {
+        "reason": "outage_report",
+        "ai_handled": "true",
+        "ai_agent": "ConnectBot-IVR",
+        "ai_confidence": "0.88",
+        "human_needed": "true",
+        "sla_target_seconds": "30",
+        "resolution": "sla_at_risk",
+        "description": "Outage report — SLA critical, transferred to human",
+    },
+    # Multi-touch / transfer scenario
+    {
+        "reason": "technical_support_complex",
+        "ai_handled": "true",
+        "ai_agent": "ResolveAI-v3",
+        "ai_confidence": "0.55",
+        "human_needed": "true",
+        "transferred": "true",
+        "transfer_reason": "skill_mismatch",
+        "resolution": "transferred_then_resolved",
+        "description": "Complex tech issue — AI + 2 human agents",
+    },
+    # Vendor reconciliation scenario (the 80% vs 42% story)
+    {
+        "reason": "vendor_bpo_contact",
+        "ai_handled": "true",
+        "ai_agent": "VendorBot-External",
+        "ai_confidence": "0.71",
+        "human_needed": "false",
+        "vendor_claimed_ai": "true",
+        "resolution": "vendor_ai_claimed",
+        "description": "BPO vendor contact — claimed as AI-resolved",
+    },
+    {
+        "reason": "vendor_bpo_contact",
+        "ai_handled": "false",
+        "ai_agent": "VendorBot-External",
+        "ai_confidence": "0.12",
+        "human_needed": "true",
+        "vendor_claimed_ai": "true",
+        "resolution": "vendor_ai_overclaimed",
+        "description": "BPO vendor contact — claimed AI but actually human",
+    },
 ]
-PRIORITIES = ["high", "medium", "medium", "low", "low"]
 
 
 class ConnectWarmer(BaseWarmer):
@@ -143,37 +248,57 @@ class ConnectWarmer(BaseWarmer):
             return False
 
     def create_activity(self, scenario_config: dict) -> dict:
-        """Create a chat or task contact in Connect."""
+        """
+        Create a chat or task contact in Connect with realistic
+        AI/human hybrid metadata matching Veratrace use cases.
+        """
         client = self._get_client()
         flow_id = self._discover_contact_flow(client)
         if not flow_id:
             raise RuntimeError("No contact flow available")
 
-        # Decide channel: 70% chat, 30% task
+        # Pick a random scenario that exercises different AI/human patterns
+        scenario = random.choice(CONTACT_SCENARIOS)
         use_task = random.random() < scenario_config.get("task_ratio", 0.3)
         customer_name = random.choice(CUSTOMER_NAMES)
         segment = random.choice(CUSTOMER_SEGMENTS)
-        reason = random.choice(CONTACT_REASONS)
         priority = random.choice(PRIORITIES)
 
+        # Contact attributes carry the AI/human attribution metadata
+        # that the ingestion pipeline will extract into TwuSignals
         attributes = {
             "customerSegment": segment,
-            "contactReason": reason,
+            "contactReason": scenario["reason"],
             "priority": priority,
             "source": "veratrace-warmer",
-            "caseId": f"WARM-{uuid.uuid4().hex[:8].upper()}",
+            "caseId": f"VT-{uuid.uuid4().hex[:8].upper()}",
+            # AI attribution — core Veratrace data
+            "aiHandled": scenario["ai_handled"],
+            "aiAgent": scenario["ai_agent"],
+            "aiConfidence": scenario["ai_confidence"],
+            "humanNeeded": scenario["human_needed"],
+            "resolution": scenario["resolution"],
         }
+
+        # Add optional fields from scenario
+        if scenario.get("transferred"):
+            attributes["transferred"] = "true"
+            attributes["transferReason"] = scenario.get("transfer_reason", "unknown")
+        if scenario.get("sla_target_seconds"):
+            attributes["slaTargetSeconds"] = scenario["sla_target_seconds"]
+        if scenario.get("vendor_claimed_ai"):
+            attributes["vendorClaimedAI"] = "true"
 
         if use_task:
             resp = client.start_task_contact(
                 InstanceId=self._instance_id,
                 ContactFlowId=flow_id,
-                Name=f"Test task: {reason.replace('_', ' ')} ({customer_name})",
-                Description=f"Automated warming task for {segment} customer",
+                Name=f"{scenario['description']} — {customer_name}",
+                Description=f"{segment.title()} customer: {scenario['description']}",
                 Attributes=attributes,
             )
             contact_id = resp["ContactId"]
-            return {"id": contact_id, "type": "TASK", "customer": customer_name}
+            return {"id": contact_id, "type": "TASK", "customer": customer_name, "scenario": scenario["reason"]}
         else:
             resp = client.start_chat_contact(
                 InstanceId=self._instance_id,
@@ -182,7 +307,7 @@ class ConnectWarmer(BaseWarmer):
                 Attributes=attributes,
             )
             contact_id = resp["ContactId"]
-            return {"id": contact_id, "type": "CHAT", "customer": customer_name}
+            return {"id": contact_id, "type": "CHAT", "customer": customer_name, "scenario": scenario["reason"]}
 
     def verify_activity(self, activity_id: str) -> bool:
         """Check if the contact produced a CTR visible in SearchContacts."""
