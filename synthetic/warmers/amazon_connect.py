@@ -266,7 +266,14 @@ class ConnectWarmer(BaseWarmer):
                 ContactFlowTypes=["CONTACT_FLOW"],
             )
             flows = resp.get("ContactFlowSummaryList", [])
-            # Prefer flows with "default" or "sample" in the name
+            # Prefer Veratrace flows (have Lex bot routing)
+            for flow in flows:
+                if "veratrace" in flow.get("Name", "").lower():
+                    self._contact_flow_id = flow["Id"]
+                    logger.info("Using contact flow: %s (%s)", flow["Name"], flow["Id"][:12])
+                    return self._contact_flow_id
+
+            # Then try default/sample flows
             for flow in flows:
                 name_lower = flow.get("Name", "").lower()
                 if any(kw in name_lower for kw in ["default", "sample", "inbound", "basic"]):
