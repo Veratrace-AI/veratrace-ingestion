@@ -24,6 +24,10 @@ from src.config import SUPABASE_URL
 
 INGESTION_API_KEY = os.environ.get("INGESTION_API_KEY", "")
 
+# Simple per-IP rate limiter: max requests per minute
+RATE_LIMIT_RPM = int(os.environ.get("RATE_LIMIT_RPM", "30"))
+_rate_tracker = {}  # ip → [timestamps]
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
@@ -41,8 +45,11 @@ class IngestionHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_POST(self):
+        if not self._check_rate_limit():
+            return
         if not self._check_api_key():
             return
+        self._audit_log("POST", self.path)
         if self.path == "/sync":
             self._handle_sync()
         elif self.path == "/test-connection":
@@ -50,15 +57,41 @@ class IngestionHandler(BaseHTTPRequestHandler):
         else:
             self._json_response(404, {"error": "Not found"})
 
+    def _check_rate_limit(self):
+        """Per-IP rate limiter. Returns True if under limit."""
+        import time as _time
+        ip = self.client_address[0]
+        now = _time.time()
+        window = _rate_tracker.get(ip, [])
+        # Remove entries older than 60 seconds
+        window = [t for t in window if now - t < 60]
+        if len(window) >= RATE_LIMIT_RPM:
+            self._json_response(429, {"error": "Rate limit exceeded. Max {} requests/minute.".format(RATE_LIMIT_RPM)})
+            logger.warning("Rate limit hit: %s (%d req/min)", ip, len(window))
+            return False
+        window.append(now)
+        _rate_tracker[ip] = window
+        return True
+
     def _check_api_key(self):
         """Validate X-API-Key header. Returns True if authorized."""
         if not INGESTION_API_KEY:
-            return True  # no key configured = open (dev mode)
+            return True
         key = self.headers.get("X-API-Key", "")
         if key != INGESTION_API_KEY:
             self._json_response(401, {"error": "Invalid or missing API key"})
             return False
         return True
+
+    def _audit_log(self, method, path):
+        """Structured audit log for every API call."""
+        logger.info(json.dumps({
+            "audit": True,
+            "method": method,
+            "path": path,
+            "source_ip": self.client_address[0],
+            "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+        }))
 
     def do_GET(self):
         if self.path == "/health":

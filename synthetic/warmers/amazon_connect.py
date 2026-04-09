@@ -431,3 +431,6 @@ class ConnectWarmer(BaseWarmer):
             if e.response["Error"]["Code"] == "ResourceNotFoundException":
                 return False
             raise
+
+WARMER_ID = "amazon-connect"
+WARMER_CLASS = ConnectWarmer

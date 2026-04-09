@@ -16,7 +16,7 @@ import sys
 import urllib.request
 
 from src.config import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, CONTROL_PLANE_URL
-from src.connectors.amazon_connect.connector import AmazonConnectConnector
+from src.connectors import CONNECTOR_MAP
 from src.runtime.cursor_manager import get_cursor, save_cursor
 from src.runtime.signal_writer import write_signals
 from src.runtime.task_trigger import trigger_compilation
@@ -27,12 +27,7 @@ logging.basicConfig(
     datefmt="%Y-%m-%dT%H:%M:%S",
 )
 logger = logging.getLogger("sync")
-
-CONNECTOR_MAP = {
-    "amazon-connect": AmazonConnectConnector,
-    # "salesforce": SalesforceConnector,  # Phase 2
-    # "zendesk": ZendeskConnector,        # Phase 2
-}
+logger.info("Registered connectors: %s", list(CONNECTOR_MAP.keys()))
 
 
 def _supabase_headers():

@@ -55,7 +55,19 @@ class BaseConnector(ABC):
 
     Subclasses must implement the abstract methods.
     Optional methods (webhooks) have default no-op implementations.
+
+    Override CONFIG in your subclass to set platform-specific values:
+        class MyConnector(BaseConnector):
+            CONFIG = {**BaseConnector.CONFIG, "rate_limit_rps": 20.0}
     """
+
+    CONFIG = {
+        "rate_limit_rps": 2.0,            # vendor API requests per second
+        "rate_ceiling_pct": 70,            # use this % of the limit
+        "cursor_format": "iso8601",        # "iso8601", "id", "offset", "token"
+        "backfill_days_default": 30,       # default lookback for first sync
+        "max_results_per_page": 100,       # vendor page size
+    }
 
     def __init__(self, instance_id: str, integration_account_id: str, credentials: dict, external_identity: dict):
         self.instance_id = instance_id

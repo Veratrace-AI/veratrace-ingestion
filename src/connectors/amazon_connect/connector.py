@@ -30,12 +30,6 @@ from src.runtime.retry_engine import with_retry, CircuitBreaker
 
 logger = logging.getLogger(__name__)
 
-# Connect API: 2 req/sec per account per region. We use 70% = 1.4 req/sec.
-# boto3 has built-in retry, but we add our own rate control between pages.
-SECONDS_BETWEEN_API_CALLS = 0.72  # ~1.4 req/sec
-BACKFILL_SECONDS_BETWEEN_CALLS = 1.5  # 50% ceiling for backfills
-MAX_RESULTS_PER_PAGE = 100
-
 
 class AmazonConnectConnector(BaseConnector):
     """
@@ -47,6 +41,15 @@ class AmazonConnectConnector(BaseConnector):
         external_identity["tenantId"] — Connect instance ARN
     """
 
+    CONFIG = {
+        **BaseConnector.CONFIG,
+        "rate_limit_rps": 2.0,             # Connect: 2 req/sec per account per region
+        "rate_ceiling_pct": 70,            # Use 70% = 1.4 req/sec
+        "backfill_rate_ceiling_pct": 50,   # 50% ceiling for backfills
+        "backfill_days_default": 30,
+        "max_results_per_page": 100,
+    }
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._instance_arn = self.external_identity.get("tenantId", "")
@@ -54,6 +57,11 @@ class AmazonConnectConnector(BaseConnector):
         self._instance_id_from_arn = self._parse_instance_id()
         self._circuit_breaker = CircuitBreaker()
         self._schema_hash = EXPECTED_SCHEMA_HASH
+        # Compute rate delays from CONFIG
+        effective_rps = self.CONFIG["rate_limit_rps"] * self.CONFIG["rate_ceiling_pct"] / 100
+        self._sync_delay = 1.0 / effective_rps if effective_rps > 0 else 1.0
+        backfill_rps = self.CONFIG["rate_limit_rps"] * self.CONFIG.get("backfill_rate_ceiling_pct", 50) / 100
+        self._backfill_delay = 1.0 / backfill_rps if backfill_rps > 0 else 2.0
         self._assumed_creds = None
         self._assumed_creds_expiry = 0
         self._creds_lock = threading.Lock()
@@ -183,7 +191,7 @@ class AmazonConnectConnector(BaseConnector):
             self._instance_id_from_arn[:8], self._region,
         )
 
-        return self._search_contacts(start_time, end_time, SECONDS_BETWEEN_API_CALLS)
+        return self._search_contacts(start_time, end_time, self._sync_delay)
 
     def sync_backfill(self, start_date=None):
         """
@@ -196,7 +204,7 @@ class AmazonConnectConnector(BaseConnector):
         end_time = datetime.now(timezone.utc)
         logger.info("Backfilling Connect contacts from %s", start_date.isoformat()[:19])
 
-        return self._search_contacts(start_date, end_time, BACKFILL_SECONDS_BETWEEN_CALLS)
+        return self._search_contacts(start_date, end_time, self._backfill_delay)
 
     def _search_contacts(self, start_time, end_time, rate_delay):
         """
@@ -222,7 +230,7 @@ class AmazonConnectConnector(BaseConnector):
                     "StartTime": start_time,
                     "EndTime": end_time,
                 },
-                "MaxResults": MAX_RESULTS_PER_PAGE,
+                "MaxResults": self.CONFIG["max_results_per_page"],
                 "Sort": {
                     "FieldName": "INITIATION_TIMESTAMP",
                     "Order": "ASCENDING",
@@ -291,7 +299,7 @@ class AmazonConnectConnector(BaseConnector):
             signals=signals,
             cursor=new_cursor,
             has_more=False,
-            records_fetched=api_calls * MAX_RESULTS_PER_PAGE,  # approximate
+            records_fetched=api_calls * self.CONFIG["max_results_per_page"],  # approximate
             api_calls_made=api_calls,
         )
 
