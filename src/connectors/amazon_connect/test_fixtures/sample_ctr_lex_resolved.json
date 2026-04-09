@@ -1,0 +1,34 @@
+{
+  "ContactId": "lex-resolved-001",
+  "Channel": "CHAT",
+  "InitiationMethod": "INBOUND",
+  "InitiationTimestamp": "2026-04-09T14:00:00Z",
+  "ConnectedToSystemTimestamp": "2026-04-09T14:00:02Z",
+  "DisconnectTimestamp": "2026-04-09T14:00:45Z",
+  "DisconnectReason": "CONTACT_FLOW_DISCONNECT",
+  "Queue": {
+    "Name": "GeneralSupport",
+    "Duration": 0
+  },
+  "Agent": {},
+  "Attributes": {
+    "customerSegment": "enterprise",
+    "botResolved": "true"
+  },
+  "LexBotInteraction": {
+    "BotName": "VeratraceSandboxBot",
+    "BotAlias": "LIVE",
+    "IntentName": "ResetPassword",
+    "ConfidenceScore": 0.94,
+    "SlotToElicit": null,
+    "SessionId": "lex-session-abc123",
+    "SessionAttributes": {
+      "account_verified": "true",
+      "reset_method": "email"
+    }
+  },
+  "AnalysisStatus": "NOT_APPLICABLE",
+  "Recording": {
+    "Status": "NOT_APPLICABLE"
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "ContactId": "contact-lens-001",
+  "Channel": "VOICE",
+  "InitiationMethod": "INBOUND",
+  "InitiationTimestamp": "2026-04-09T15:00:00Z",
+  "ConnectedToSystemTimestamp": "2026-04-09T15:00:08Z",
+  "DisconnectTimestamp": "2026-04-09T15:07:30Z",
+  "DisconnectReason": "CUSTOMER_DISCONNECT",
+  "Queue": {
+    "Name": "TechSupport",
+    "Duration": 6
+  },
+  "Agent": {
+    "ARN": "arn:aws:connect:us-west-2:291925528464:instance/abc/agent/agent-marcus-j",
+    "Username": "marcus.johnson",
+    "AgentInteractionDuration": 445,
+    "AfterContactWorkDuration": 45,
+    "HoldDuration": 20
+  },
+  "Attributes": {
+    "customerSegment": "enterprise",
+    "priority": "high"
+  },
+  "AnalysisStatus": "COMPLETED",
+  "ContactLens": {
+    "Transcript": [
+      {
+        "ParticipantRole": "CUSTOMER",
+        "Content": "I've been having issues with the service since yesterday.",
+        "AbsoluteTime": "2026-04-09T15:00:10Z"
+      },
+      {
+        "ParticipantRole": "AGENT",
+        "Content": "I understand, let me look into that for you right away.",
+        "AbsoluteTime": "2026-04-09T15:00:15Z"
+      }
+    ],
+    "Categories": {
+      "MatchedCategories": ["Technical Issue", "Service Disruption"],
+      "CategoryResults": [
+        {"Name": "Technical Issue", "Matched": true},
+        {"Name": "Service Disruption", "Matched": true}
+      ]
+    },
+    "SentimentAnalysis": {
+      "OverallSentiment": "MIXED",
+      "CustomerSentiment": {
+        "BeginningMomentSentiment": "NEGATIVE",
+        "MiddleMomentSentiment": "NEUTRAL",
+        "EndMomentSentiment": "POSITIVE"
+      },
+      "AgentSentiment": {
+        "BeginningMomentSentiment": "POSITIVE",
+        "MiddleMomentSentiment": "POSITIVE",
+        "EndMomentSentiment": "POSITIVE"
+      }
+    },
+    "IssuesDetected": []
+  },
+  "Recording": {
+    "Status": "AVAILABLE"
+  }
+}

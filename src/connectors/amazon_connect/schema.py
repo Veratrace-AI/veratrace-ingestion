@@ -31,15 +31,36 @@ EXPECTED_CTR_FIELDS = {
     "ScheduledTimestamp",
     "CampaignId",
     "AnsweringMachineDetectionStatus",
-    # Contact Lens fields (when enabled)
+    # Lex bot interaction (when bot is in the contact flow)
+    "LexBotInteraction",
+    # Contact Lens fields (when enabled on instance)
     "AnalysisStatus",
+    "ContactLens",
     "Transcript",
     "Categories",
     "SentimentAnalysis",
 }
 
+# Lex bot interaction sub-fields
+LEX_FIELDS = {
+    "BotName",
+    "BotAlias",
+    "IntentName",
+    "ConfidenceScore",
+    "SlotToElicit",
+    "SessionId",
+    "SessionAttributes",
+}
+
+# Contact Lens sub-fields
+CONTACT_LENS_FIELDS = {
+    "Transcript",          # Array of {ParticipantRole, Content, AbsoluteTime}
+    "Categories",          # {MatchedCategories, CategoryResults}
+    "SentimentAnalysis",   # {OverallSentiment, CustomerSentiment, AgentSentiment}
+    "IssuesDetected",      # Array of {Name, Timestamp}
+}
+
 # Schema hash computed from these fields — update when Connect changes their CTR format
-# Recompute with: schema_validator.compute_schema_hash(sample_ctr)
 EXPECTED_SCHEMA_HASH = "initial_placeholder"
 
 # Fields that contain PII — must be encrypted at write time

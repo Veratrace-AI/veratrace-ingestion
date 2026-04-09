@@ -1,0 +1,41 @@
+{
+  "ContactId": "lex-transferred-001",
+  "Channel": "CHAT",
+  "InitiationMethod": "INBOUND",
+  "InitiationTimestamp": "2026-04-09T14:05:00Z",
+  "ConnectedToSystemTimestamp": "2026-04-09T14:05:15Z",
+  "DisconnectTimestamp": "2026-04-09T14:12:30Z",
+  "DisconnectReason": "CUSTOMER_DISCONNECT",
+  "Queue": {
+    "Name": "BillingQueue",
+    "Duration": 12
+  },
+  "Agent": {
+    "ARN": "arn:aws:connect:us-west-2:291925528464:instance/abc/agent/agent-sarah-chen",
+    "Username": "sarah.chen",
+    "AgentInteractionDuration": 420,
+    "AfterContactWorkDuration": 30,
+    "HoldDuration": 0
+  },
+  "Attributes": {
+    "customerSegment": "mid-market",
+    "botResolved": "false",
+    "transferReason": "billing_dispute"
+  },
+  "LexBotInteraction": {
+    "BotName": "VeratraceSandboxBot",
+    "BotAlias": "LIVE",
+    "IntentName": "BillingInquiry",
+    "ConfidenceScore": 0.38,
+    "SlotToElicit": "dispute_amount",
+    "SessionId": "lex-session-def456",
+    "SessionAttributes": {
+      "account_verified": "true",
+      "escalation_reason": "low_confidence"
+    }
+  },
+  "AnalysisStatus": "NOT_APPLICABLE",
+  "Recording": {
+    "Status": "AVAILABLE"
+  }
+}
