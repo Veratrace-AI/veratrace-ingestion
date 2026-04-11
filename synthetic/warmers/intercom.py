@@ -176,7 +176,7 @@ class IntercomWarmer(BaseWarmer):
         # Create conversation (customer sends initial message)
         try:
             conv = self._api_post("/conversations", {
-                "from": {"type": "contact", "id": contact_id},
+                "from": {"type": "user", "id": contact_id},
                 "body": scenario["subject"],
             })
         except urllib.error.HTTPError as e:
