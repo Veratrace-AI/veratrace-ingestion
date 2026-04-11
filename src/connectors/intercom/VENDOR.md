@@ -36,3 +36,9 @@
 - **Fin:** Built-in AI agent with full attribution (did_resolve, confidence, content_sources)
 - **Custom Bots:** Workflow-based bots (pre-Fin), appear as author.type == "bot"
 - **Operator:** Intercom's automation engine, appears in conversation_parts
+
+## Sandbox Limitations
+- **Developer workspaces cannot create conversations via API** (api_plan_restricted error)
+- Requires at least a 14-day free trial or paid plan to use conversation creation endpoints
+- Reading conversations works on dev workspaces
+- Warmer built and ready — just needs an active subscription workspace

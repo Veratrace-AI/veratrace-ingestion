@@ -101,6 +101,12 @@ def main():
             parser.error("SF_ACCESS_TOKEN and SF_INSTANCE_URL env vars required for Salesforce warming")
         credentials = {"access_token": sf_token, "instance_url": sf_instance}
         external_identity = {"tenantId": sf_instance}
+    elif args.platform == "intercom":
+        ic_token = os.environ.get("INTERCOM_ACCESS_TOKEN", "")
+        if not ic_token:
+            parser.error("INTERCOM_ACCESS_TOKEN env var required for Intercom warming")
+        credentials = {"accessToken": ic_token}
+        external_identity = {"tenantId": "intercom-workspace"}
     else:
         # Amazon Connect (default)
         if not args.role_arn or not args.instance_arn:
