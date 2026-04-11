@@ -102,7 +102,11 @@ export const yourPlatformMetadata = {
 
 Import in `metadata/index.js` — the catalog, filters, and detail drawer auto-wire.
 
-## Optional: Add a warmer
+## Step 7: Deploy the warmer (REQUIRED — not optional)
+
+A connector is not done until the sandbox is continuously warming. Every connector needs:
+
+### 7a. Build the warmer
 
 Create `synthetic/warmers/your_platform.py`:
 ```python
@@ -117,7 +121,33 @@ WARMER_ID = "your-platform"
 WARMER_CLASS = YourPlatformWarmer
 ```
 
-Auto-registers via `synthetic/warmers/__init__.py`. Run: `python -m synthetic.warm --platform your-platform --contacts 5`
+Auto-registers via `synthetic/warmers/__init__.py`.
+
+### 7b. Add platform credentials to warm.py
+
+Update `synthetic/warm.py` to build credentials from env vars for your platform:
+```python
+elif args.platform == "your-platform":
+    token = os.environ.get("YOUR_PLATFORM_TOKEN", "")
+    if not token:
+        parser.error("YOUR_PLATFORM_TOKEN env var required")
+    credentials = {"access_token": token, ...}
+```
+
+### 7c. Store secrets and deploy cron
+
+1. Add sandbox credentials as GitHub Actions secrets on veraagents repo
+2. Add env vars to the `.env` write step in `veraagents/.github/workflows/deploy.yml`
+3. Add warming cron entry in the same deploy workflow
+4. Push and verify cron is running: `ssh vera@159.203.133.76 "crontab -l | grep your-platform"`
+
+### 7d. Verify data flows
+
+```bash
+python -m synthetic.warm --platform your-platform --contacts 3
+# Wait 15 min for cron sync
+# Check dashboard — real data appears
+```
 
 ## Optional: Add vendor knowledge
 
