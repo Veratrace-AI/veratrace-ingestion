@@ -96,6 +96,33 @@ sf org display --target-org sf-sandbox --json | python3 -c "import json,sys; pri
 
 ---
 
+## Freshdesk
+
+| Field | Value |
+|-------|-------|
+| **Portal URL** | https://vtgraham1.freshdesk.com |
+| **Domain** | vtgraham1 |
+| **API Key** | `gQgCQ5xTA_C7JKov1OVe` |
+| **Auth method** | Basic Auth (API key as username, `X` as password) |
+| **Trial** | 21-day free trial (check expiry) |
+| **Warming** | 3 tickets every 2 hours weekdays via `synthetic.warm --platform freshdesk` |
+| **Lifecycle** | Create ticket (Open) → Freddy Bot note → Human reply note → Status→Pending → Status→Resolved. Full conversation thread with bot/human attribution. |
+
+### Scenarios warmed
+- 35% Freddy auto-resolved (FAQ, password reset, pricing inquiry)
+- 25% Freddy → human handoff (billing disputes, sync issues)
+- 15% Human-only (enterprise SLA, compliance docs)
+- 10% Multi-agent (complex technical, transferred)
+- 10% SLA breach (resolution exceeded target)
+- 5% Vendor reconciliation (bot claims resolved, customer reopens)
+
+### Notes
+- Trial expires after 21 days — renew at freshworks.com/freshdesk/signup/
+- API key found at Profile Settings → Your API Key
+- Rate limit: 200 calls/min (Growth plan)
+
+---
+
 ## Genesys Cloud
 
 | Field | Value |
@@ -137,6 +164,8 @@ INTERCOM_ACCESS_TOKEN=...
 SNOW_INSTANCE_URL=https://dev379979.service-now.com
 SNOW_USERNAME=admin
 SNOW_PASSWORD=...
+FRESHDESK_DOMAIN=vtgraham1
+FRESHDESK_API_KEY=...
 ```
 
 ### Warming schedule (all times UTC, weekdays only)
@@ -146,3 +175,4 @@ SNOW_PASSWORD=...
 | Intercom | :15, hourly 15-01 | 3/hour | `synthetic.warm --platform intercom` |
 | Salesforce | :30, hourly 15-01 | 3/hour | `synthetic.warm --platform salesforce` |
 | ServiceNow | :45, every 2h (15,17,19,21,23) | 5/run | `synthetic.seed_servicenow --incidents 5` |
+| Freshdesk | :15, every 2h (16,18,20,22,0) | 3/run | `synthetic.warm --platform freshdesk` |
