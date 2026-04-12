@@ -109,12 +109,18 @@ def main():
         external_identity = {"tenantId": "intercom-workspace"}
     elif args.platform == "servicenow":
         snow_url = os.environ.get("SNOW_INSTANCE_URL", "")
+        snow_user = os.environ.get("SNOW_USERNAME", "")
+        snow_pass = os.environ.get("SNOW_PASSWORD", "")
         snow_client_id = os.environ.get("SNOW_CLIENT_ID", "")
         snow_client_secret = os.environ.get("SNOW_CLIENT_SECRET", "")
-        if not snow_url or not snow_client_id or not snow_client_secret:
-            parser.error("SNOW_INSTANCE_URL, SNOW_CLIENT_ID, SNOW_CLIENT_SECRET env vars required for ServiceNow warming")
+        if not snow_url:
+            parser.error("SNOW_INSTANCE_URL env var required for ServiceNow warming")
+        if not (snow_user and snow_pass) and not (snow_client_id and snow_client_secret):
+            parser.error("Either SNOW_USERNAME+SNOW_PASSWORD or SNOW_CLIENT_ID+SNOW_CLIENT_SECRET required")
         credentials = {
             "instance_url": snow_url,
+            "username": snow_user,
+            "password": snow_pass,
             "client_id": snow_client_id,
             "client_secret": snow_client_secret,
         }

@@ -177,10 +177,26 @@ class ServiceNowWarmer(BaseWarmer):
     def __init__(self, credentials, external_identity=None):
         super().__init__(credentials, external_identity or {})
         self._instance_url = credentials.get("instance_url", "").rstrip("/")
+        # Support both OAuth (client_id/secret) and Basic Auth (username/password)
         self._client_id = credentials.get("client_id", "")
         self._client_secret = credentials.get("client_secret", "")
+        self._username = credentials.get("username", "")
+        self._password = credentials.get("password", "")
         self._access_token = credentials.get("access_token", "")
+        self._use_basic_auth = bool(self._username and self._password)
         self._token_lock = threading.Lock()
+
+    def _auth_header(self):
+        """Return the appropriate auth header."""
+        if self._use_basic_auth:
+            import base64
+            creds = base64.b64encode(
+                f"{self._username}:{self._password}".encode()
+            ).decode()
+            return f"Basic {creds}"
+        if not self._access_token:
+            self._obtain_token()
+        return f"Bearer {self._access_token}"
 
     def _obtain_token(self):
         with self._token_lock:
@@ -202,34 +218,38 @@ class ServiceNowWarmer(BaseWarmer):
             self._access_token = result["access_token"]
 
     def _api_post(self, table, body):
-        if not self._access_token:
-            self._obtain_token()
         url = f"{self._instance_url}/api/now/table/{table}"
         data = json.dumps(body).encode()
         req = urllib.request.Request(url, data=data, method="POST")
-        req.add_header("Authorization", f"Bearer {self._access_token}")
+        req.add_header("Authorization", self._auth_header())
+        req.add_header("Content-Type", "application/json")
+        req.add_header("Accept", "application/json")
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return json.loads(resp.read())
+
+    def _api_patch(self, table, sys_id, body):
+        url = f"{self._instance_url}/api/now/table/{table}/{sys_id}"
+        data = json.dumps(body).encode()
+        req = urllib.request.Request(url, data=data, method="PATCH")
+        req.add_header("Authorization", self._auth_header())
         req.add_header("Content-Type", "application/json")
         req.add_header("Accept", "application/json")
         with urllib.request.urlopen(req, timeout=30) as resp:
             return json.loads(resp.read())
 
     def _api_get(self, table, sys_id):
-        if not self._access_token:
-            self._obtain_token()
         url = f"{self._instance_url}/api/now/table/{table}/{sys_id}"
         req = urllib.request.Request(url)
-        req.add_header("Authorization", f"Bearer {self._access_token}")
+        req.add_header("Authorization", self._auth_header())
         req.add_header("Accept", "application/json")
         with urllib.request.urlopen(req, timeout=30) as resp:
             return json.loads(resp.read())
 
     def validate_access(self):
         try:
-            if not self._access_token:
-                self._obtain_token()
             url = f"{self._instance_url}/api/now/table/incident?sysparm_limit=1"
             req = urllib.request.Request(url)
-            req.add_header("Authorization", f"Bearer {self._access_token}")
+            req.add_header("Authorization", self._auth_header())
             req.add_header("Accept", "application/json")
             with urllib.request.urlopen(req, timeout=15) as resp:
                 resp.read()
@@ -239,7 +259,8 @@ class ServiceNowWarmer(BaseWarmer):
             return False
 
     def create_activity(self, scenario_config=None):
-        if scenario_config is None:
+        # Use our weighted scenarios if caller passes generic config (or None)
+        if not scenario_config or "short_description" not in scenario_config:
             scenario_config = self._pick_scenario()
 
         caller = random.choice(CALLER_NAMES)
@@ -254,14 +275,23 @@ class ServiceNowWarmer(BaseWarmer):
             "contact_type": scenario_config.get("contact_type", "phone"),
         }
 
-        # Set resolved fields if resolved
-        state = scenario_config.get("state", "1")
-        if state == "6":
-            body["state"] = "6"
-            body["close_code"] = scenario_config.get("close_code", "")
-            body["close_notes"] = scenario_config.get("close_notes", "")
-
+        # Create in New state first (business rules may block skipping states)
         result = self._api_post("incident", body)
+        record = result.get("result", {})
+        sys_id = record.get("sys_id", "")
+
+        # Then resolve via PATCH if scenario calls for it
+        state = scenario_config.get("state", "1")
+        if state == "6" and sys_id:
+            try:
+                resolve_body = {
+                    "state": "6",
+                    "close_code": scenario_config.get("close_code", "Solved (Permanently)"),
+                    "close_notes": scenario_config.get("close_notes", "Resolved by warmer"),
+                }
+                self._api_patch("incident", sys_id, resolve_body)
+            except Exception as e:
+                logger.warning("Could not resolve incident %s: %s", sys_id, str(e)[:100])
         record = result.get("result", {})
         sys_id = record.get("sys_id", "")
         number = record.get("number", "")
