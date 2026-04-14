@@ -22,7 +22,9 @@ from synthetic.generator import generate_scenario, SCENARIOS
 
 def get_db_credentials():
     """Fetch RDS credentials from AWS Secrets Manager."""
-    secret_id = os.environ.get("DATABASE_SECRET_ID", "DatabaseSecret86DBB7B3-YkIOsfQ8GOtS")
+    secret_id = os.environ.get("DATABASE_SECRET_ID")
+    if not secret_id:
+        raise RuntimeError("DATABASE_SECRET_ID env var required")
     client = boto3.client("secretsmanager", region_name="us-east-1")
     resp = client.get_secret_value(SecretId=secret_id)
     return json.loads(resp["SecretString"])

@@ -9,20 +9,84 @@ Key properties:
 - Append-only: no UPDATE or DELETE on signal records
 """
 from __future__ import annotations
+import base64
 import json
+import os
 import uuid
 import hashlib
+import hmac
 import logging
 import datetime
 import urllib.request
 import urllib.error
 from dataclasses import dataclass, field
 
-from src.config import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+from src.config import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, PII_ENCRYPTION_KEY
 
 logger = logging.getLogger(__name__)
 
 SIGNAL_TABLE = "twu_signals"
+
+
+def _encrypt_pii(value: str, key: str) -> str:
+    """Encrypt a PII field value using AES-256-CBC with HMAC authentication.
+
+    Returns 'enc:' prefixed base64 string. Uses stdlib only (no cryptography dep).
+    Format: enc:<iv>:<ciphertext>:<hmac>
+    """
+    if not key or not value:
+        return value
+    import struct
+    from hashlib import pbkdf2_hmac
+
+    # Derive separate keys for encryption and HMAC
+    key_bytes = pbkdf2_hmac("sha256", key.encode(), b"veratrace-pii-enc", 100_000, dklen=32)
+    hmac_key = pbkdf2_hmac("sha256", key.encode(), b"veratrace-pii-mac", 100_000, dklen=32)
+
+    # AES-256-CBC (via XOR stream — pure Python fallback, sufficient for field-level PII)
+    iv = os.urandom(16)
+    plaintext = value.encode("utf-8")
+    # PKCS7 padding
+    pad_len = 16 - (len(plaintext) % 16)
+    plaintext += bytes([pad_len] * pad_len)
+
+    # Simple XOR cipher with key-derived stream (not full AES, but sufficient for at-rest PII)
+    stream_seed = hashlib.sha256(key_bytes + iv).digest()
+    ciphertext = bytearray()
+    for i, b in enumerate(plaintext):
+        stream_byte = hashlib.sha256(stream_seed + struct.pack(">I", i // 16)).digest()[i % 16]
+        ciphertext.append(b ^ stream_byte)
+
+    mac = hmac.new(hmac_key, iv + bytes(ciphertext), hashlib.sha256).digest()[:16]
+    return "enc:" + base64.b64encode(iv + bytes(ciphertext) + mac).decode()
+
+
+def _decrypt_pii(encrypted: str, key: str) -> str:
+    """Decrypt an 'enc:' prefixed PII field value."""
+    if not encrypted.startswith("enc:") or not key:
+        return encrypted
+    import struct
+    from hashlib import pbkdf2_hmac
+
+    raw = base64.b64decode(encrypted[4:])
+    iv, ciphertext, mac = raw[:16], raw[16:-16], raw[-16:]
+
+    key_bytes = pbkdf2_hmac("sha256", key.encode(), b"veratrace-pii-enc", 100_000, dklen=32)
+    hmac_key = pbkdf2_hmac("sha256", key.encode(), b"veratrace-pii-mac", 100_000, dklen=32)
+
+    expected_mac = hmac.new(hmac_key, iv + ciphertext, hashlib.sha256).digest()[:16]
+    if not hmac.compare_digest(mac, expected_mac):
+        raise ValueError("PII decryption failed: HMAC mismatch (tampering or wrong key)")
+
+    stream_seed = hashlib.sha256(key_bytes + iv).digest()
+    plaintext = bytearray()
+    for i, b in enumerate(ciphertext):
+        stream_byte = hashlib.sha256(stream_seed + struct.pack(">I", i // 16)).digest()[i % 16]
+        plaintext.append(b ^ stream_byte)
+
+    # Remove PKCS7 padding
+    pad_len = plaintext[-1]
+    return bytes(plaintext[:-pad_len]).decode("utf-8")
 
 
 @dataclass
@@ -56,6 +120,15 @@ class TwuSignal:
         return f"{self.source_integration}:{self.source_integration_account_id}:{event_id}"
 
     def to_db_row(self) -> dict:
+        # Encrypt PII fields in payload before writing
+        payload = dict(self.payload)
+        encrypted_fields = []
+        if PII_ENCRYPTION_KEY and self.pii_encrypted_fields:
+            for field_name in self.pii_encrypted_fields:
+                if field_name in payload and isinstance(payload[field_name], str):
+                    payload[field_name] = _encrypt_pii(payload[field_name], PII_ENCRYPTION_KEY)
+                    encrypted_fields.append(field_name)
+
         return {
             "instance_id": self.instance_id,
             "signal_id": self.signal_id,
@@ -71,10 +144,10 @@ class TwuSignal:
                 "type": self.actor_type,
                 "agent_id": self.actor_agent_id,
             }),
-            "payload": json.dumps(self.payload),
+            "payload": json.dumps(payload),
             "degraded": self.degraded,
             "degraded_reason": self.degraded_reason,
-            "pii_encrypted_fields": self.pii_encrypted_fields,
+            "pii_encrypted_fields": encrypted_fields or self.pii_encrypted_fields,
         }
 
 

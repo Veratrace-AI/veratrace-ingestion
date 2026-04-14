@@ -99,6 +99,8 @@ class IngestionHandler(BaseHTTPRequestHandler):
         }))
 
     def do_GET(self):
+        if not self._check_rate_limit():
+            return
         if self.path == "/health":
             self._json_response(200, {"status": "ok", "supabase": bool(SUPABASE_URL)})
         elif self.path == "/health/warming":

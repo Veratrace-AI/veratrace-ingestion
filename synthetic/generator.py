@@ -291,10 +291,11 @@ if __name__ == "__main__":
         idx = args.index("--signals")
         num_contacts = int(args[idx + 1])
 
-    # Use the vt-test-oauth instance for testing
-    instance_id = os.environ.get("INSTANCE_ID", "549ffaef-158a-4d68-8672-2fa79a91edb9")
-    # Use the integration account that was just created
-    integration_account_id = os.environ.get("INTEGRATION_ACCOUNT_ID", "test-connect-account")
+    instance_id = os.environ.get("INSTANCE_ID", "")
+    integration_account_id = os.environ.get("INTEGRATION_ACCOUNT_ID", "")
+    if not instance_id or not integration_account_id:
+        print("ERROR: INSTANCE_ID and INTEGRATION_ACCOUNT_ID env vars required")
+        sys.exit(1)
 
     signals = generate_scenario(instance_id, integration_account_id, scenario, num_contacts)
 
