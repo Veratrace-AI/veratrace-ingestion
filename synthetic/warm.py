@@ -97,9 +97,16 @@ def main():
     if args.platform == "salesforce":
         sf_token = os.environ.get("SF_ACCESS_TOKEN", "")
         sf_instance = os.environ.get("SF_INSTANCE_URL", "")
+        sf_client_id = os.environ.get("SF_CLIENT_ID", "")
+        sf_client_secret = os.environ.get("SF_CLIENT_SECRET", "")
         if not sf_token or not sf_instance:
             parser.error("SF_ACCESS_TOKEN and SF_INSTANCE_URL env vars required for Salesforce warming")
-        credentials = {"access_token": sf_token, "instance_url": sf_instance}
+        credentials = {
+            "access_token": sf_token,
+            "instance_url": sf_instance,
+            "client_id": sf_client_id,
+            "client_secret": sf_client_secret,
+        }
         external_identity = {"tenantId": sf_instance}
     elif args.platform == "intercom":
         ic_token = os.environ.get("INTERCOM_ACCESS_TOKEN", "")

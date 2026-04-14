@@ -80,7 +80,8 @@ class IngestionHandler(BaseHTTPRequestHandler):
     def _check_api_key(self):
         """Validate X-API-Key header. Returns True if authorized."""
         if not INGESTION_API_KEY:
-            return True
+            self._json_response(503, {"error": "API key not configured — server misconfigured"})
+            return False
         key = self.headers.get("X-API-Key", "")
         if key != INGESTION_API_KEY:
             self._json_response(401, {"error": "Invalid or missing API key"})
@@ -101,8 +102,11 @@ class IngestionHandler(BaseHTTPRequestHandler):
         if self.path == "/health":
             self._json_response(200, {"status": "ok", "supabase": bool(SUPABASE_URL)})
         elif self.path == "/health/warming":
+            if not self._check_api_key():
+                return
             self._handle_warming_health()
         elif self.path.startswith("/blog/approve"):
+            # /blog/approve has its own HMAC auth — no API key needed
             self._handle_blog_approve()
         else:
             self._json_response(404, {"error": "Not found"})
