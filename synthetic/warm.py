@@ -136,7 +136,29 @@ def main():
                 except Exception as _re:
                     print(f"  Token refresh failed: {_re}")
             elif e.code == 401:
-                print(f"  SF token expired — no refresh_token available, warming will fail")
+                # Fallback: try SF CLI token refresh (works with PlatformCLI auth)
+                try:
+                    import subprocess
+                    _result = subprocess.run(
+                        ["sf", "org", "display", "--target-org", "sf-sandbox", "--json"],
+                        capture_output=True, text=True, timeout=30
+                    )
+                    if _result.returncode == 0:
+                        _cli_data = json.loads(_result.stdout).get("result", {})
+                        sf_token = _cli_data.get("accessToken", "")
+                        if sf_token:
+                            print(f"  Token refreshed via SF CLI")
+                            _env_path = os.path.expanduser("~/veratrace-ingestion/.env")
+                            if os.path.exists(_env_path):
+                                _env = open(_env_path).read()
+                                _env = re.sub(r'SF_ACCESS_TOKEN=.*', f'SF_ACCESS_TOKEN={sf_token}', _env)
+                                open(_env_path, "w").write(_env)
+                        else:
+                            print(f"  SF token expired — SF CLI returned no token, warming will fail")
+                    else:
+                        print(f"  SF token expired — SF CLI refresh failed, warming will fail")
+                except Exception as _cli_err:
+                    print(f"  SF token expired — no refresh mechanism available: {_cli_err}")
         except Exception:
             pass  # Network issue — proceed and let the warmer report the error
 
