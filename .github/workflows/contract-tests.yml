@@ -17,6 +17,11 @@ jobs:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_DEFAULT_REGION: us-east-1
+      # Registry test fixtures (non-secret UUIDs). Set as repo variables, not secrets.
+      # Without these, tests/contract/test_integration_accounts_registry.py silently
+      # skips and the Phase 1 cutover gate stops gating anything.
+      KNOWN_GOOD_INSTANCE_ID: ${{ vars.KNOWN_GOOD_INSTANCE_ID }}
+      KNOWN_GOOD_AC_ACCOUNT_ID: ${{ vars.KNOWN_GOOD_AC_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6

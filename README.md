@@ -79,6 +79,40 @@ Deployed to DigitalOcean (`159.203.133.76`) via **veraagents** GitHub Actions (`
 | Contract tests | Nightly | Validate against live vendor APIs |
 | API server | Always (systemd) | HTTP API on port 8090, Caddy TLS on 443 |
 
+## Control Plane Auth (Cognito M2M)
+
+The scheduler authenticates to `api.veratrace.app` as a service via Cognito client_credentials. Tokens are minted on demand and cached ~1 min before expiry.
+
+| Setting | Value |
+|---|---|
+| User pool | `us-east-1_9pfLjvzDE` (account `717662748559`) |
+| Resource server | `api.veratrace.app` |
+| Scope | `scheduler.read` |
+| App client | `2tppl42kglsjac4b38ph2n6sgv` (`veratrace-scheduler-m2m`) |
+| Token endpoint | `https://instancetest1.auth.us-east-1.amazoncognito.com/oauth2/token` |
+
+Env vars (`M2M_CLIENT_ID`, `M2M_CLIENT_SECRET`, `M2M_TOKEN_ENDPOINT`, `M2M_SCOPE`) are written to `~/veratrace-ingestion/.env` by the veraagents deploy workflow from GHA secrets — do **not** edit on the server directly. Local-dev copies should pull from the GHA secret store.
+
+If the secret is lost: re-mint via `aws cognito-idp update-user-pool-client --user-pool-id us-east-1_9pfLjvzDE --client-id 2tppl42kglsjac4b38ph2n6sgv --generate-secret`, then update `M2M_CLIENT_SECRET` in `Veratrace-AI/veraagents` GHA secrets and re-deploy.
+
+If the user pool is wiped, recreate the resource server + app client:
+
+```bash
+aws cognito-idp create-resource-server \
+  --user-pool-id us-east-1_9pfLjvzDE \
+  --identifier 'api.veratrace.app' --name 'Veratrace Control Plane API' \
+  --scopes ScopeName=scheduler.read,ScopeDescription='Read integration accounts' \
+  --region us-east-1
+
+aws cognito-idp create-user-pool-client \
+  --user-pool-id us-east-1_9pfLjvzDE --client-name veratrace-scheduler-m2m \
+  --generate-secret --allowed-o-auth-flows client_credentials \
+  --allowed-o-auth-flows-user-pool-client \
+  --allowed-o-auth-scopes 'api.veratrace.app/scheduler.read' --region us-east-1
+```
+
+Then update GHA secrets `M2M_CLIENT_ID` / `M2M_CLIENT_SECRET` in `Veratrace-AI/veraagents` and re-deploy.
+
 ## Sandbox Warming
 
 Creates real contacts with AI/human hybrid scenarios:
