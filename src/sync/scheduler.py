@@ -11,6 +11,7 @@ Usage:
   python3 -m src.sync.scheduler --diagnose FILE    # validate_credentials() only on account dict in FILE
 """
 import base64
+import datetime
 import json
 import logging
 import os
@@ -24,6 +25,7 @@ from src.config import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, CONTROL_PLANE_UR
 from src.connectors import CONNECTOR_MAP
 from src.runtime.cursor_manager import get_cursor, save_cursor
 from src.runtime.signal_writer import write_signals
+from src.runtime.sync_runs import write_sync_run
 from src.runtime.task_trigger import trigger_compilation
 
 logging.basicConfig(
@@ -287,15 +289,29 @@ def sync_account(account, backfill=False):
         error = str(e)[:200]
         raise
     finally:
+        duration_ms = int((time.time() - started_at) * 1000)
         logger.info(_logfmt(
             "sync_account_end",
             account_id=account_id[:8] or "?",
             integration_id=integration_id or "?",
             status=status,
             signals_written=signals_written,
-            duration_ms=int((time.time() - started_at) * 1000),
+            duration_ms=duration_ms,
             error=error,
         ))
+        # Persist the same event to sync_runs for durable querying.
+        # write_sync_run swallows failures — observability must never break sync.
+        write_sync_run({
+            "integration_account_id": account_id,
+            "instance_id": instance_id,
+            "integration_id": integration_id,
+            "status": status,
+            "signals_written": signals_written,
+            "duration_ms": duration_ms,
+            "error": error,
+            "backfill": bool(backfill),
+            "finished_at": datetime.datetime.utcnow().isoformat() + "Z",
+        })
 
 
 def diagnose_account(account):
