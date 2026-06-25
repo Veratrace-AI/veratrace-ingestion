@@ -53,6 +53,12 @@ class IngestionHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         if not self._check_rate_limit():
             return
+        # /vercel-drain has its own shared-secret auth (Vercel can't send our
+        # X-API-Key header on log drain calls). Route before the API-key gate.
+        if self.path == "/vercel-drain":
+            self._audit_log("POST", self.path)
+            self._handle_vercel_drain()
+            return
         if not self._check_api_key():
             return
         self._audit_log("POST", self.path)
@@ -470,6 +476,108 @@ class IngestionHandler(BaseHTTPRequestHandler):
         except Exception as e:
             logger.error("Blog approve failed (%s): %s", slug, str(e)[:200])
             self._html_response(500, f"Failed to approve: {str(e)[:100]}")
+
+    def _handle_vercel_drain(self):
+        """POST /vercel-drain — accept Vercel Web Analytics NDJSON drain.
+
+        Vercel pushes one event per line. We validate a shared secret header,
+        parse each line, and batch-insert into Supabase public.web_events. The
+        brief reads aggregates from that table for the daily Performance section.
+
+        Auth: X-Drain-Secret header must match VERCEL_DRAIN_SECRET env var.
+        Returns 200 {accepted, rejected} so Vercel doesn't retry on partial-bad batches.
+        """
+        # Shared-secret auth — Vercel drain configuration includes this header.
+        expected = os.environ.get("VERCEL_DRAIN_SECRET", "")
+        if not expected:
+            logger.error("VERCEL_DRAIN_SECRET not configured on server")
+            self._json_response(503, {"error": "drain secret not configured"})
+            return
+        provided = self.headers.get("X-Drain-Secret", "")
+        if not hmac.compare_digest(provided, expected):
+            logger.warning("vercel-drain: bad secret from %s", self.client_address[0])
+            self._json_response(401, {"error": "invalid drain secret"})
+            return
+
+        # Read body. Vercel may send up to a few MB per batch.
+        content_length = int(self.headers.get("Content-Length", "0"))
+        if content_length <= 0 or content_length > 10 * 1024 * 1024:
+            self._json_response(400, {"error": "invalid Content-Length"})
+            return
+        try:
+            body = self.rfile.read(content_length)
+        except Exception as e:
+            self._json_response(400, {"error": f"body read failed: {str(e)[:100]}"})
+            return
+
+        # Parse NDJSON, line per event. Tolerant of blank lines + trailing newline.
+        rows = []
+        rejected = 0
+        for line in body.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                evt = json.loads(line)
+            except json.JSONDecodeError:
+                rejected += 1
+                continue
+            ts_ms = evt.get("timestamp")
+            try:
+                ts_iso = datetime.datetime.fromtimestamp(
+                    ts_ms / 1000.0, tz=datetime.timezone.utc
+                ).isoformat()
+            except Exception:
+                rejected += 1
+                continue
+            rows.append({
+                "schema":     evt.get("schema"),
+                "event_type": evt.get("eventType"),
+                "event_name": evt.get("eventName"),
+                "ts":         ts_iso,
+                "project_id": evt.get("projectId"),
+                "owner_id":   evt.get("ownerId"),
+                "session_id": evt.get("sessionId"),
+                "device_id":  evt.get("deviceId"),
+                "origin":     evt.get("origin"),
+                "path":       evt.get("path"),
+                "event_data": evt.get("eventData"),
+                "raw":        evt,
+            })
+
+        if not rows:
+            # Nothing valid — 200 anyway so Vercel doesn't retry forever.
+            self._json_response(200, {"accepted": 0, "rejected": rejected})
+            return
+
+        # Batch insert via Supabase REST. service-role bypasses RLS.
+        supabase_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+        if not SUPABASE_URL or not supabase_key:
+            self._json_response(503, {"error": "supabase not configured"})
+            return
+        try:
+            req = urllib.request.Request(
+                f"{SUPABASE_URL}/rest/v1/web_events",
+                data=json.dumps(rows).encode(),
+                method="POST",
+            )
+            req.add_header("apikey", supabase_key)
+            req.add_header("Authorization", f"Bearer {supabase_key}")
+            req.add_header("Content-Type", "application/json")
+            req.add_header("Prefer", "return=minimal")
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                resp.read()
+        except urllib.error.HTTPError as e:
+            body_err = e.read().decode("utf-8", "replace")[:300]
+            logger.error("vercel-drain supabase insert HTTP %d: %s", e.code, body_err)
+            self._json_response(502, {"error": f"supabase {e.code}", "detail": body_err[:200]})
+            return
+        except Exception as e:
+            logger.error("vercel-drain supabase insert failed: %s", str(e)[:200])
+            self._json_response(500, {"error": str(e)[:200]})
+            return
+
+        self._json_response(200, {"accepted": len(rows), "rejected": rejected})
 
     def _html_response(self, status, body_html):
         self.send_response(status)
