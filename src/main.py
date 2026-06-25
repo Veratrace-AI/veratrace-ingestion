@@ -511,7 +511,16 @@ class IngestionHandler(BaseHTTPRequestHandler):
             self._json_response(503, {"error": "drain secret not configured"})
             return
         provided = self.headers.get("X-Drain-Secret", "")
+        if not provided:
+            # Vercel's UI sends a verification POST *before* the drain is saved,
+            # so the X-Drain-Secret header isn't applied yet. Return 200 without
+            # inserting so the UI's "endpoint reachable" check passes.
+            logger.info("vercel-drain: verification probe from %s", self.client_address[0])
+            self._json_response(200, {"verified": True, "accepted": 0})
+            return
         if not hmac.compare_digest(provided, expected):
+            # Header present but wrong — a misconfigured drain. 401 is the right
+            # signal so the user sees it as an authentication failure.
             logger.warning("vercel-drain: bad secret from %s", self.client_address[0])
             self._json_response(401, {"error": "invalid drain secret"})
             return

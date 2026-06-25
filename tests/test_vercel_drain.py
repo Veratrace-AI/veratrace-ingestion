@@ -112,14 +112,15 @@ _PAGEVIEW = {
 
 
 class TestDrainAuth:
-    def test_missing_secret_header_is_401(self, server):
+    def test_missing_secret_header_is_200_verification_probe(self, server):
+        """Vercel UI sends a verification POST without the X-Drain-Secret
+        header before the drain config is saved. Endpoint must return 2xx so
+        the UI's reachability check passes; nothing is inserted."""
         body = _ndjson([_PAGEVIEW])
-        try:
-            urllib.request.urlopen(_drain_request(server, body, secret=None), timeout=5)
-            assert False, "expected 401"
-        except urllib.error.HTTPError as e:
-            assert e.code == 401
-            assert b"drain secret" in e.read()
+        r = urllib.request.urlopen(_drain_request(server, body, secret=None), timeout=5)
+        assert r.status == 200
+        resp = json.loads(r.read())
+        assert resp == {"verified": True, "accepted": 0}
 
     def test_wrong_secret_is_401(self, server):
         body = _ndjson([_PAGEVIEW])
