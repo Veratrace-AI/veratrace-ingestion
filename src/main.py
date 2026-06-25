@@ -106,11 +106,28 @@ class IngestionHandler(BaseHTTPRequestHandler):
             "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
         }))
 
+    def do_HEAD(self):
+        """Most log drain providers (Vercel included) probe the endpoint with
+        HEAD or GET before letting the user save the drain. Treat /vercel-drain
+        as healthy for those probes; everything else falls through to 404."""
+        if self.path == "/vercel-drain":
+            self.send_response(200)
+            self._cors_headers()
+            self.end_headers()
+        else:
+            self.send_response(404)
+            self._cors_headers()
+            self.end_headers()
+
     def do_GET(self):
         if not self._check_rate_limit():
             return
         if self.path == "/health":
             self._json_response(200, {"status": "ok", "supabase": bool(SUPABASE_URL)})
+        elif self.path == "/vercel-drain":
+            # Vercel UI does a GET against the drain URL during creation to
+            # confirm the endpoint exists. 200 + a short payload is enough.
+            self._json_response(200, {"status": "ok", "endpoint": "vercel-drain"})
         elif self.path == "/health/warming":
             if not self._check_api_key():
                 return
