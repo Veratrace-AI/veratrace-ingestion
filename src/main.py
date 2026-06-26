@@ -510,22 +510,10 @@ class IngestionHandler(BaseHTTPRequestHandler):
             logger.error("VERCEL_DRAIN_SECRET not configured on server")
             self._json_response(503, {"error": "drain secret not configured"})
             return
-        provided = self.headers.get("X-Drain-Secret", "")
-        if not provided:
-            # Vercel's UI sends a verification POST *before* the drain is saved,
-            # so the X-Drain-Secret header isn't applied yet. Return 200 without
-            # inserting so the UI's "endpoint reachable" check passes.
-            logger.info("vercel-drain: verification probe from %s", self.client_address[0])
-            self._json_response(200, {"verified": True, "accepted": 0})
-            return
-        if not hmac.compare_digest(provided, expected):
-            # Header present but wrong — a misconfigured drain. 401 is the right
-            # signal so the user sees it as an authentication failure.
-            logger.warning("vercel-drain: bad secret from %s", self.client_address[0])
-            self._json_response(401, {"error": "invalid drain secret"})
-            return
-
-        # Read body. Vercel may send up to a few MB per batch.
+        # Always drain the request body before responding — sending a response
+        # before consuming the body breaks HTTP/1.1 with a TCP reset on the
+        # client side (and Vercel's drain client may treat that as a delivery
+        # failure and retry endlessly).
         content_length = int(self.headers.get("Content-Length", "0"))
         if content_length <= 0 or content_length > 10 * 1024 * 1024:
             self._json_response(400, {"error": "invalid Content-Length"})
@@ -536,7 +524,39 @@ class IngestionHandler(BaseHTTPRequestHandler):
             self._json_response(400, {"error": f"body read failed: {str(e)[:100]}"})
             return
 
-        # Parse NDJSON, line per event. Tolerant of blank lines + trailing newline.
+        provided = self.headers.get("X-Drain-Secret", "")
+        if not provided:
+            # Vercel's UI sends a verification POST *before* the drain is saved,
+            # so the X-Drain-Secret header isn't applied yet. Return 200 so the
+            # UI test passes — but ONLY if the body is small (no real events).
+            # If we accept a substantive body without auth, real misconfigured
+            # drains (e.g. headers serialized as {"Key": ...} on 2026-06-25)
+            # silently drop data with no visible error. Better to log + 401.
+            if content_length > 2048:
+                logger.error(
+                    "vercel-drain: substantive POST (%dB) without X-Drain-Secret "
+                    "from %s — drain headers likely misconfigured. "
+                    "Refusing to silently accept.",
+                    content_length, self.client_address[0],
+                )
+                self._json_response(401, {
+                    "error": "no drain secret on real event",
+                    "hint": "drain headers may be set to literal Key/Value instead of header name",
+                })
+                return
+            logger.info("vercel-drain: verification probe from %s (body=%dB)",
+                        self.client_address[0], content_length)
+            self._json_response(200, {"verified": True, "accepted": 0})
+            return
+        if not hmac.compare_digest(provided, expected):
+            # Header present but wrong — a misconfigured drain. 401 is the right
+            # signal so the user sees it as an authentication failure.
+            logger.warning("vercel-drain: bad secret from %s", self.client_address[0])
+            self._json_response(401, {"error": "invalid drain secret"})
+            return
+
+        # Body was already read at the top of the method. Parse NDJSON,
+        # line per event. Tolerant of blank lines + trailing newline.
         rows = []
         rejected = 0
         for line in body.splitlines():

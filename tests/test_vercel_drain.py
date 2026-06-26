@@ -112,15 +112,30 @@ _PAGEVIEW = {
 
 
 class TestDrainAuth:
-    def test_missing_secret_header_is_200_verification_probe(self, server):
-        """Vercel UI sends a verification POST without the X-Drain-Secret
-        header before the drain config is saved. Endpoint must return 2xx so
-        the UI's reachability check passes; nothing is inserted."""
-        body = _ndjson([_PAGEVIEW])
-        r = urllib.request.urlopen(_drain_request(server, body, secret=None), timeout=5)
+    def test_small_body_without_secret_is_verification_probe_200(self, server):
+        """Vercel UI sends a small verification POST without the X-Drain-Secret
+        header before the drain config is saved. Small body + no secret
+        returns 2xx so the UI's reachability check passes."""
+        r = urllib.request.urlopen(
+            _drain_request(server, b'{"ping":"test"}', secret=None), timeout=5)
         assert r.status == 200
         resp = json.loads(r.read())
         assert resp == {"verified": True, "accepted": 0}
+
+    def test_substantive_body_without_secret_is_401(self, server):
+        """The 2026-06-26 silent-data-loss bug: Vercel UI saved drain headers
+        as {"Key": "X-Drain-Secret", "Value": ...} literally — real events
+        arrived with no X-Drain-Secret. Endpoint must NOT silently swallow."""
+        # Make the body > 2048 bytes so it can't be a verification ping
+        big_payload = [_PAGEVIEW] * 50
+        body = _ndjson(big_payload)
+        assert len(body) > 2048
+        try:
+            urllib.request.urlopen(_drain_request(server, body, secret=None), timeout=5)
+            assert False, "expected 401"
+        except urllib.error.HTTPError as e:
+            assert e.code == 401
+            assert b"no drain secret" in e.read()
 
     def test_wrong_secret_is_401(self, server):
         body = _ndjson([_PAGEVIEW])
