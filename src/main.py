@@ -18,7 +18,7 @@ import os
 import sys
 import urllib.error
 import urllib.request
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -659,8 +659,14 @@ def main():
         idx = sys.argv.index("--port")
         port = int(sys.argv[idx + 1])
 
-    server = HTTPServer(("0.0.0.0", port), IngestionHandler)
-    logger.info("Ingestion API listening on :%d", port)
+    # ThreadingHTTPServer (not plain HTTPServer): the API is single-threaded
+    # otherwise, so one slow/hung request (e.g. a connector call blocking on a
+    # remote API) deadlocks every endpoint, including /health — which is exactly
+    # how the whole service went dark behind Caddy 502s on 2026-07-01. Each
+    # request now gets its own daemon thread.
+    server = ThreadingHTTPServer(("0.0.0.0", port), IngestionHandler)
+    server.daemon_threads = True
+    logger.info("Ingestion API listening on :%d (threaded)", port)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
