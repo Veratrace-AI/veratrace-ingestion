@@ -15,6 +15,7 @@ import hmac
 import json
 import logging
 import os
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -442,8 +443,9 @@ class IngestionHandler(BaseHTTPRequestHandler):
             return
 
         try:
-            # Look up post title from Supabase
-            lookup_url = f"{SUPABASE_URL}/rest/v1/blog_posts?slug=eq.{slug}&select=id,title,status"
+            # Look up post from Supabase (body included so we can pre-flight the
+            # [VERIFY:] guardrail — see below)
+            lookup_url = f"{SUPABASE_URL}/rest/v1/blog_posts?slug=eq.{slug}&select=id,title,status,body"
             req = urllib.request.Request(lookup_url, method="GET")
             req.add_header("apikey", supabase_key)
             req.add_header("Authorization", f"Bearer {supabase_key}")
@@ -458,6 +460,28 @@ class IngestionHandler(BaseHTTPRequestHandler):
                     f"<h2>Already {post.get('status', 'processed')}: {slug}</h2>"
                     f'<p><a href="https://veratrace.ai/blog/{slug}">View →</a></p>'
                 )
+                return
+
+            # Pre-flight the [VERIFY:] guardrail. The publish cron runs the full
+            # review guardrail and hard-BLOCKs any post with unresolved [VERIFY:]
+            # markers (unverified claims), logging a "reviewed" event but NEVER a
+            # "published" one — so an approved post with markers retries and
+            # re-blocks every cycle, silently, forever. Previously approval said
+            # "will publish next cycle" regardless, giving zero feedback. Catch
+            # the common case here and refuse the approval with an actionable
+            # message instead of writing a doomed approved_publish event.
+            verify_count = len(re.findall(r"\[VERIFY:", post.get("body") or ""))
+            if verify_count:
+                marker = "marker" if verify_count == 1 else "markers"
+                self._html_response(200,
+                    f"<h2>Not published — {verify_count} unresolved [VERIFY:] {marker}</h2>"
+                    f"<p><strong>{post.get('title', slug)}</strong> still has {verify_count} "
+                    f"unverified claim{'' if verify_count == 1 else 's'} the guardrail won't let "
+                    f"publish. Resolve each [VERIFY: …] in the body (confirm the claim and delete "
+                    f"the marker, or cut the claim), then re-approve.</p>"
+                    f'<p><a href="https://veratrace.ai/blog/{slug}">Preview draft →</a></p>'
+                )
+                logger.info("Blog approve blocked: %s has %d [VERIFY:] marker(s)", slug, verify_count)
                 return
 
             # Write approved_publish event to pipeline log. Two things matter here:
